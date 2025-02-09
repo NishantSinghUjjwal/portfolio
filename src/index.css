@@ -1,0 +1,30 @@
+
+@import "tailwindcss";
+
+/* ... */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* Add this to your global CSS file */
+@layer utilities {
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 12px; /* Width of the scrollbar */
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #f0f0f000; /* Color of the track */
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #1a1a1a; /* Color of the thumb */
+    border-radius: 6px; /* Rounded corners for the thumb */
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #161616; /* Hover color of the thumb */
+  }
+}
