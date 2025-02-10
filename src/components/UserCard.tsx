@@ -1,5 +1,4 @@
 import { Github, Instagram, Linkedin } from 'lucide-react'
-import React from 'react'
 
 const UserCard = () => {
     const skills = [

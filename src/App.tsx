@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import UserCard from './components/UserCard'
 import ProjectCard from './components/ProjectCard'
 
@@ -11,7 +10,6 @@ export interface Project {
   githubUrl: string;
 }
 function App() {
-  const [count, setCount] = useState(0)
 
   const projects: Project[] = [
     {

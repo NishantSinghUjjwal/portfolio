@@ -1,5 +1,4 @@
 import { ExternalLink, Github } from 'lucide-react';
-import React from 'react'
 import { Project } from '../App';
 
 const ProjectCard = ({ image, description, tags, liveUrl, githubUrl, title }: Project) => {
