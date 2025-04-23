@@ -1,8 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect } from "react";
-import { Message, Section } from "./chat-layout";
-import { Bot, Code, Mail, User, Zap, Coffee, Briefcase, Rocket, BookOpen, Award, Heart } from "lucide-react";
+import { Bot, Code, Mail, User, Zap, Briefcase, BookOpen } from "lucide-react";
 
 // Add unique ID generation function
 const generateUniqueId = () => {

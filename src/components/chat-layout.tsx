@@ -4,10 +4,9 @@ import React, { useRef, useEffect, useState } from "react";
 import { ModeToggle } from "@/components/mode-toggle";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Menu, SendIcon, PlusIcon, XIcon, ChevronDown } from "lucide-react";
+import { ChevronDown, PlusIcon, SendIcon } from "lucide-react";
 import { useChat } from "./chat-provider";
 import ReactMarkdown from "react-markdown";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 export type Message = {
   id: string;
