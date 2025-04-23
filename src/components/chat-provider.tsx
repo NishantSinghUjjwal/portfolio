@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect } from "react";
-import { Bot, Code, Mail, User, Zap, Briefcase, BookOpen } from "lucide-react";
+import { Code, Mail, Zap, Briefcase, BookOpen } from "lucide-react";
 
 // Add unique ID generation function
 const generateUniqueId = () => {

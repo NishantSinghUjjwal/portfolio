@@ -25,7 +25,6 @@ export type Section = "intro" | "skills" | "projects" | "about" | "contact";
 export const ChatLayout: React.FC = () => {
   const { messages, handleUserInput, isTyping } = useChat();
   const [input, setInput] = React.useState("");
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
