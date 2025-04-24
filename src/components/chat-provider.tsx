@@ -89,7 +89,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     funFact: "am self-motivated and detail-oriented",
     skills: {
       frontend: ["React.js", "Next.js", "JavaScript", "TypeScript", "Tailwind CSS"],
-      backend: ["Node.js", "MongoDB", "PostgreSQL"],
+      backend: ["Node.js", "MongoDB", "PostgreSQL", "GraphQL"],
       devops: ["Git"],
     },
     projects: [
@@ -133,8 +133,9 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   // Generate welcome message on initial render
   useEffect(() => {
     if (messages.length === 0) {
+      const welcomeId = generateUniqueId();
       const welcomeMessage: ChatMessage = {
-        id: "welcome",
+        id: welcomeId,
         role: "assistant",
         content: `Hi! I'm an AI assistant for ${portfolioInfo.name}'s portfolio. I can help you explore their:
 
@@ -172,19 +173,39 @@ What would you like to know about?`,
       id: generateUniqueId(),
       timestamp: new Date().getTime(),
     };
-    console.log(newMessage);
     setMessages((prev) => [...prev, newMessage]);
   }, []);
 
-  // Simulated streaming response
+  // Initialize API integration flag
+  const useApiIntegration = true; // Always try to use the API route first
+
+  // API helper function for making chat completions requests
+  const callChatApi = async (messages: any[]) => {
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messages,
+        model: "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8"
+      }),
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Error calling API');
+    }
+    
+    return await response.json();
+  };
+
+  // Response function with API or fallback
   const streamResponse = async (content: string, options?: MessageOption[]) => {
     const messageId = generateUniqueId();
     setStreamingId(messageId);
     setIsTyping(true);
 
-    let streamedContent = '';
-    const words = content.split(' ');
-    
     // Create and add the initial message
     const initialMessage: ChatMessage = {
       id: messageId,
@@ -195,24 +216,55 @@ What would you like to know about?`,
     };
     setMessages(prev => [...prev, initialMessage]);
 
-    // Stream the content
-    for (let i = 0; i < words.length; i++) {
-      streamedContent += (i === 0 ? '' : ' ') + words[i];
+    try {
+      if (useApiIntegration) {
+        // Call the API route
+        const response = await callChatApi([
+          {
+            "role": "system", 
+            "content": `You are an AI assistant for ${portfolioInfo.name}'s portfolio website. Format your response using markdown.`
+          },
+          {"role": "assistant", "content": content}
+        ]);
+
+        // Get the AI response
+        const aiContent = response.choices[0]?.message?.content || content;
+        
+        // Update the message with the API response
+        setMessages(prev => {
+          const newMessages = [...prev];
+          const lastMessage = newMessages[newMessages.length - 1];
+          if (lastMessage && lastMessage.id === messageId) {
+            lastMessage.content = aiContent;
+            lastMessage.options = options;
+          }
+          return newMessages;
+        });
+      } else {
+        // Fallback to the provided content (without API)
+        setMessages(prev => {
+          const newMessages = [...prev];
+          const lastMessage = newMessages[newMessages.length - 1];
+          if (lastMessage && lastMessage.id === messageId) {
+            lastMessage.content = content;
+            lastMessage.options = options;
+          }
+          return newMessages;
+        });
+      }
+    } catch (error) {
+      console.error("Error in response generation:", error);
       
-      // Update the message content
+      // Fallback to the provided content in case of API error
       setMessages(prev => {
         const newMessages = [...prev];
         const lastMessage = newMessages[newMessages.length - 1];
         if (lastMessage && lastMessage.id === messageId) {
-          lastMessage.content = streamedContent + (i === words.length - 1 ? '' : '▋');
-          if (i === words.length - 1) {
-            lastMessage.options = options;
-          }
+          lastMessage.content = content;
+          lastMessage.options = options;
         }
         return newMessages;
       });
-
-      await new Promise(resolve => setTimeout(resolve, 30 + Math.random() * 30));
     }
 
     // Clean up
@@ -220,101 +272,91 @@ What would you like to know about?`,
     setStreamingId(null);
   };
 
+  const handleUserInput = useCallback((input: string) => {
+    // Add user message
+    addMessage({
+      role: "user",
+      content: input,
+    });
+    
+    // Generate response with Together AI
+    generateResponse(input);
+  }, [addMessage]);
+
   const generateResponse = async (userMessage: string) => {
     setIsTyping(true);
     
-    const query = userMessage.toLowerCase();
-    const updatedContext = { ...conversationContext };
-    updatedContext.questionsAsked += 1;
+    try {
+      if (useApiIntegration) {
+        // API integration path
+        // Get all previous messages for context
+        const messageHistory = messages.map(msg => ({
+          role: msg.role as "user" | "assistant" | "system",
+          content: msg.content
+        }));
+        
+        // Add a system message with portfolio information
+        const systemMessage = {
+          role: "system" as const,
+          content: `You are an AI assistant for ${portfolioInfo.name}'s portfolio website. 
+          
+Information about ${portfolioInfo.name}:
+- Role: ${portfolioInfo.role}
+- Location: ${portfolioInfo.location}
+- Education: ${portfolioInfo.education}
+- Email: ${portfolioInfo.email}
+- LinkedIn: ${portfolioInfo.linkedin}
+- GitHub: ${portfolioInfo.github}
+- Website: ${portfolioInfo.website}
 
-    // Intent recognition system
-    const intents: Intents = {
-      skills: {
-        patterns: ['skills', 'good at', 'know', 'technologies', 'tech stack', 'abilities', 'can do', 'proficient', 'experience'],
-        subtopics: {
-          frontend: ['front', 'frontend', 'ui', 'react', 'javascript', 'typescript', 'css', 'html', 'tailwind'],
-          backend: ['back', 'backend', 'server', 'database', 'api', 'node', 'express', 'sql', 'postgres', 'mongodb'],
-          devops: ['devops', 'deployment', 'git', 'version control']
-        }
-      },
-      projects: {
-        patterns: ['project', 'portfolio', 'work', 'built', 'created', 'developed', 'showcase', 'github', 'demo'],
-        subtopics: {
-          portfolio: ['portfolio', 'website', 'portfolio website', 'portfolio site'],
-          dashboard: ['dashboard', 'project dashboard', 'metrics', 'performance', 'visualization'],
-          taskapp: ['task', 'management', 'app', 'task app', 'todo']
-        }
-      },
-      contact: {
-        patterns: ['contact', 'email', 'reach out', 'connect', 'linkedin', 'github', 'social', 'dm', 'message']
-      },
-      personal: {
-        patterns: ['yourself', 'about you', 'background', 'interests', 'hobbies', 'passion', 'who are you', 'tell me about']
-      },
-      reset: {
-        patterns: ['reset', 'start over', 'beginning', 'restart', 'start again', 'go back', 'fresh']
-      }
-    };
+Skills:
+- Frontend: ${portfolioInfo.skills.frontend.join(", ")}
+- Backend: ${portfolioInfo.skills.backend.join(", ")}
+- DevOps: ${portfolioInfo.skills.devops.join(", ")}
 
-    // Detect intent and subtopic
-    let detectedIntent = 'unknown';
-    let subtopic = '';
-    let highestScore = 0;
+Projects:
+${portfolioInfo.projects.map(p => `- ${p.name}: ${p.description} (${p.techStack.join(", ")})`).join("\n")}
 
-    Object.entries(intents).forEach(([intent, data]) => {
-      const patterns = data.patterns;
-      patterns.forEach(pattern => {
-        if (query.includes(pattern)) {
-          const score = pattern.length / query.length * 2;
-          if (score > highestScore) {
-            highestScore = score;
-            detectedIntent = intent;
+About:
+${portfolioInfo.about}
+
+Provide helpful, friendly responses about these topics. Use markdown formatting.`
+        };
+        
+        // Create the final message array
+        const completeMessageHistory = [
+          systemMessage,
+          ...messageHistory,
+          {
+            role: "user" as const, 
+            content: userMessage
           }
-        }
-      });
-
-      if (data.subtopics) {
-        Object.entries(data.subtopics).forEach(([sub, subPatterns]) => {
-          subPatterns.forEach((pattern: string) => {
-            if (query.includes(pattern)) {
-              const score = pattern.length / query.length * 2.5;
-              if (score > highestScore) {
-                highestScore = score;
-                detectedIntent = intent;
-                subtopic = sub;
-              }
-            }
-          });
+        ];
+        
+        // Call the Together AI API through our API route
+        const response = await callChatApi(completeMessageHistory);
+        
+        // Get the response from the API
+        const aiContent = response.choices[0]?.message?.content || "I'm sorry, I couldn't generate a response";
+        
+        // Generate appropriate options based on the content
+        const options = generateOptionsFromContent(aiContent);
+        
+        // Add the assistant's response
+        addMessage({
+          role: "assistant",
+          content: aiContent,
+          options: options,
         });
-      }
-    });
-
-    // Update conversation context
-    updatedContext.lastTopic = detectedIntent;
-    if (detectedIntent === 'personal') updatedContext.personalInfoAsked = true;
-    if (detectedIntent === 'contact') updatedContext.contactRequested = true;
-
-    setConversationContext(updatedContext);
-
-    let response = '';
-    let options: MessageOption[] = [];
-
-    // Generate response based on intent
-    switch (detectedIntent) {
-      case 'skills':
-        if (subtopic === 'frontend') {
-          response = `In frontend development, I specialize in ${portfolioInfo.skills.frontend.join(", ")}. I focus on creating responsive, accessible, and performant user interfaces with modern web technologies.`;
-          options = [
-            { label: "Backend Skills", value: "What about your backend skills?", icon: <Code className="h-4 w-4" /> },
-            { label: "View Projects", value: "Show me your frontend projects", icon: <Briefcase className="h-4 w-4" /> }
-          ];
-        } else if (subtopic === 'backend') {
-          response = `For backend development, I work with ${portfolioInfo.skills.backend.join(", ")}. I have experience building scalable APIs and working with various database systems.`;
-          options = [
-            { label: "Frontend Skills", value: "What frontend technologies do you use?", icon: <Code className="h-4 w-4" /> },
-            { label: "View Projects", value: "Show me your backend projects", icon: <Briefcase className="h-4 w-4" /> }
-          ];
-        } else {
+      } else {
+        // Fallback path - use simple pattern matching for demo purposes
+        let response = "";
+        let options: MessageOption[] = [];
+        
+        const query = userMessage.toLowerCase();
+        
+        // Simple pattern matching
+        if (query.includes("skill") || query.includes("experience") || query.includes("tech")) {
           response = `I work with various technologies across the stack:
 
 **Frontend:** ${portfolioInfo.skills.frontend.join(", ")}
@@ -327,25 +369,34 @@ Would you like to know more about any specific area?`;
             { label: "Backend Details", value: "Tell me about your backend skills", icon: <Code className="h-4 w-4" /> },
             { label: "View Projects", value: "Show me your projects", icon: <Briefcase className="h-4 w-4" /> }
           ];
-        }
-        break;
+        } else if (query.includes("frontend")) {
+          response = `In frontend development, I specialize in:
 
-      case 'projects':
-        if (subtopic === 'portfolio') {
-          const project = portfolioInfo.projects.find(p => p.name === "Portfolio Website")!;
-          response = `**${project.name}**
+**React.js** - Building efficient, reusable UI components
+**Next.js** - Server-side rendering and static site generation
+**TypeScript** - Type-safe code that scales
+**JavaScript** - Modern ES6+ features
+**Tailwind CSS** - Utility-first responsive designs
 
-${project.description}
-
-**Tech Stack:** ${project.techStack.join(", ")}
-**Key Achievement:** ${project.challengesSolved}
-
-You can view the [live site](${project.liveUrl}) or check out the [source code](${project.codeUrl}).`;
+I focus on creating responsive, accessible, and performant user interfaces with modern web technologies.`;
           options = [
-            { label: "Other Projects", value: "What other projects have you worked on?", icon: <Briefcase className="h-4 w-4" /> },
-            { label: "Tech Stack", value: "Tell me more about the tech stack", icon: <Code className="h-4 w-4" /> }
+            { label: "Backend Skills", value: "What about your backend skills?", icon: <Code className="h-4 w-4" /> },
+            { label: "View Projects", value: "Show me your frontend projects", icon: <Briefcase className="h-4 w-4" /> }
           ];
-        } else {
+        } else if (query.includes("backend")) {
+          response = `For backend development, I work with:
+
+**Node.js** - Server-side JavaScript runtime
+**MongoDB** - NoSQL database for flexible data models
+**PostgreSQL** - Robust relational database
+**GraphQL** - Efficient API queries and data fetching
+
+I have experience building scalable APIs, designing database schemas, and implementing efficient data access patterns.`;
+          options = [
+            { label: "Frontend Skills", value: "What frontend technologies do you use?", icon: <Code className="h-4 w-4" /> },
+            { label: "View Projects", value: "Show me your backend projects", icon: <Briefcase className="h-4 w-4" /> }
+          ];
+        } else if (query.includes("project")) {
           response = `Here are some of my key projects:
 
 ${portfolioInfo.projects.map(project => 
@@ -358,11 +409,8 @@ ${project.description}
             value: `Tell me more about ${project.name}`,
             icon: <Briefcase className="h-4 w-4" />
           }));
-        }
-        break;
-
-      case 'contact':
-        response = `You can reach me through:
+        } else if (query.includes("contact")) {
+          response = `You can reach me through:
 
 📧 **Email:** ${portfolioInfo.email}
 🔗 **LinkedIn:** ${portfolioInfo.linkedin}
@@ -370,78 +418,75 @@ ${project.description}
 🌐 **Website:** ${portfolioInfo.website}
 
 Feel free to connect for professional opportunities or collaborations!`;
-        options = [
-          { label: "View Projects", value: "Show me your projects first", icon: <Briefcase className="h-4 w-4" /> },
-          { label: "Experience", value: "Tell me about your experience", icon: <BookOpen className="h-4 w-4" /> }
-        ];
-        break;
-
-      case 'personal':
-        response = `I'm ${portfolioInfo.name}, a ${portfolioInfo.role} based in ${portfolioInfo.location}.
-
-${portfolioInfo.about}
-
-I'm passionate about ${portfolioInfo.interests.join(", ")}.`;
-        options = [
-          { label: "Skills", value: "What are your technical skills?", icon: <Zap className="h-4 w-4" /> },
-          { label: "Projects", value: "Show me your projects", icon: <Briefcase className="h-4 w-4" /> },
-          { label: "Contact", value: "How can I contact you?", icon: <Mail className="h-4 w-4" /> }
-        ];
-        break;
-
-      case 'reset':
-        setConversationContext({
-          mentionedProjects: [],
-          mentionedSkills: [],
-          personalInfoAsked: false,
-          contactRequested: false,
-          questionsAsked: 0,
-        });
-
-        response = `Let's start fresh! I can help you explore:
-
-• Experience and skills
-• Projects and achievements
-• Contact information
-
-What would you like to know about?`;
-        options = [
-          { label: "Skills & Experience", value: "Tell me about your skills and experience", icon: <Zap className="h-4 w-4" /> },
-          { label: "View Projects", value: "Show me your projects", icon: <Code className="h-4 w-4" /> },
-          { label: "Contact Info", value: "How can I contact you?", icon: <Mail className="h-4 w-4" /> }
-        ];
-        break;
-
-      default:
-        if (updatedContext.questionsAsked === 1) {
-          response = `I'm here to help you learn about my experience as a ${portfolioInfo.role}. You can ask about my skills, projects, or how to get in touch. What interests you?`;
-        } else if (updatedContext.lastTopic) {
-          response = `I'm not sure I understood that. We were discussing ${updatedContext.lastTopic}. Would you like to know more about that or something else?`;
+          options = [
+            { label: "View Projects", value: "Show me your projects first", icon: <Briefcase className="h-4 w-4" /> },
+            { label: "Experience", value: "Tell me about your experience", icon: <BookOpen className="h-4 w-4" /> }
+          ];
         } else {
           response = `I can tell you about my skills, projects, experience, or how to get in touch. What would you like to know?`;
+          options = [
+            { label: "Skills", value: "Tell me about your skills", icon: <Zap className="h-4 w-4" /> },
+            { label: "Projects", value: "Show me your projects", icon: <Briefcase className="h-4 w-4" /> },
+            { label: "Contact", value: "How can I contact you?", icon: <Mail className="h-4 w-4" /> }
+          ];
         }
-        options = [
-          { label: "Skills", value: "Tell me about your skills", icon: <Zap className="h-4 w-4" /> },
-          { label: "Projects", value: "Show me your projects", icon: <Briefcase className="h-4 w-4" /> },
-          { label: "Contact", value: "How can I contact you?", icon: <Mail className="h-4 w-4" /> }
-        ];
-        break;
+        
+        // Add the assistant's response
+        addMessage({
+          role: "assistant",
+          content: response,
+          options: options,
+        });
+      }
+    } catch (error) {
+      console.error("Error generating response:", error);
+      
+      // Fallback response in case of error
+      addMessage({
+        role: "assistant",
+        content: "I'm sorry, I encountered an error processing your request. Please try again later.",
+        options: [
+          { label: "Start Over", value: "reset", icon: <Zap className="h-4 w-4" /> }
+        ],
+      });
     }
-
-    // Stream the response
-    await streamResponse(response, options);
-  };
-
-  const handleUserInput = useCallback((input: string) => {
-    // Add user message
-    addMessage({
-      role: "user",
-      content: input,
-    });
     
-    // Generate response
-    generateResponse(input);
-  }, [addMessage, conversationContext]);
+    setIsTyping(false);
+  };
+  
+  // Helper function to generate options based on content
+  const generateOptionsFromContent = (content: string): MessageOption[] => {
+    const options: MessageOption[] = [];
+    
+    // Add skill-related options
+    if (content.toLowerCase().includes("frontend") || content.toLowerCase().includes("react")) {
+      options.push({ label: "Backend Skills", value: "What about your backend skills?", icon: <Code className="h-4 w-4" /> });
+    }
+    
+    if (content.toLowerCase().includes("backend") || content.toLowerCase().includes("node")) {
+      options.push({ label: "Frontend Skills", value: "Tell me about your frontend skills", icon: <Code className="h-4 w-4" /> });
+    }
+    
+    // Add project-related options
+    if (content.toLowerCase().includes("project")) {
+      options.push({ label: "View All Projects", value: "Show me your projects", icon: <Briefcase className="h-4 w-4" /> });
+    }
+    
+    // Add contact option if not already discussed
+    if (!content.toLowerCase().includes("email") && !content.toLowerCase().includes("contact")) {
+      options.push({ label: "Contact Info", value: "How can I contact you?", icon: <Mail className="h-4 w-4" /> });
+    }
+    
+    // Ensure we always have at least one option
+    if (options.length === 0) {
+      options.push(
+        { label: "Skills", value: "Tell me about your skills", icon: <Zap className="h-4 w-4" /> },
+        { label: "Projects", value: "Show me your projects", icon: <Briefcase className="h-4 w-4" /> }
+      );
+    }
+    
+    return options;
+  };
 
   const value = {
     messages,
